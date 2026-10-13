@@ -32,7 +32,9 @@ public class GuiDriverExtension implements QuPathExtension {
 
     @Override
     public void installExtension(QuPathGUI qupath) {
-        var item = new CheckMenuItem("MCP server");
+        // One submenu for the extension, as QuPath's other extensions do, rather than items loose in Extensions.
+        var menu = qupath.getMenu("Extensions>MCP server", true);
+        var item = new CheckMenuItem("Enabled");
         item.selectedProperty().bindBidirectional(enabled);
         var show = new Menu("Show agent actions");
         var modes = new ToggleGroup();
@@ -48,11 +50,11 @@ public class GuiDriverExtension implements QuPathExtension {
             Indicator.mode.addListener((obs, was, now) -> radio.setSelected(now == m));
             show.getItems().add(radio);
         }
-        qupath.getMenu("Extensions", true).getItems().addAll(item, show);
+        menu.getItems().addAll(item, show);
         qupath.getPreferencePane().addPropertyPreference(port, Integer.class, "MCP server port", "MCP server",
                 "Port for the MCP server on 127.0.0.1; takes effect when the server next starts.");
         qupath.getPreferencePane().addPropertyPreference(Indicator.delayMs, Integer.class, "Paced delay (ms)", "MCP server",
-                "In the Paced setting of Extensions > Show agent actions, how long the pointer takes to reach each "
+                "In the Paced setting of Extensions > MCP server > Show agent actions, how long the pointer takes to reach each "
                         + "control before the agent acts on it.");
 
         String script = System.getProperty("qupath.driver.script");
