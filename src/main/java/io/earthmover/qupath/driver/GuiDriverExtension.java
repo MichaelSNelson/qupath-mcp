@@ -62,7 +62,8 @@ public class GuiDriverExtension implements QuPathExtension {
     }
 
     private void run(QuPathGUI qupath, String script) {
-        var driver = new GuiDriver(qupath, System.getProperty("qupath.driver.out", "/tmp"));
+        // snap() writes PNGs here; the JVM's temp dir exists on every platform, /tmp does not.
+        var driver = new GuiDriver(qupath, System.getProperty("qupath.driver.out", System.getProperty("java.io.tmpdir")));
         try {
             // installExtension runs before the main stage is shown.
             driver.waitForShowing(qupath.getStage(), 60);
