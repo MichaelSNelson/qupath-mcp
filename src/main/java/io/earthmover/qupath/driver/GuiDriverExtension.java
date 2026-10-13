@@ -1,6 +1,7 @@
 package io.earthmover.qupath.driver;
 
 import java.io.File;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,11 @@ public class GuiDriverExtension implements QuPathExtension {
             show.getItems().add(radio);
         }
         qupath.getMenu("Extensions", true).getItems().addAll(item, show);
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.enabled, Boolean.class, "Log agent actions", "MCP server",
+                "Record every tool call the agent makes, with its arguments and result, as one JSON line per action in a "
+                        + "file per QuPath session, so the session can be checked or reproduced.");
+        qupath.getPreferencePane().addDirectoryPropertyPreference(ActionLog.folder, "Action log folder", "MCP server",
+                "Where the action logs go. Empty means the mcp-logs folder in QuPath's user directory.");
         qupath.getPreferencePane().addPropertyPreference(port, Integer.class, "MCP server port", "MCP server",
                 "Port for the MCP server on 127.0.0.1; takes effect when the server next starts.");
         qupath.getPreferencePane().addPropertyPreference(Indicator.delayMs, Integer.class, "Paced delay (ms)", "MCP server",
@@ -78,7 +84,14 @@ public class GuiDriverExtension implements QuPathExtension {
             });
             if (script != null) {
                 logger.info("Driver running {}", script);
-                driver.evaluate(new File(script), null);
+                var entry = driver.actions.begin("script", null, "script", Map.of("path", script));
+                try {
+                    var result = driver.evaluate(new File(script), null);
+                    entry.done("result: " + result);
+                } catch (Throwable t) {
+                    entry.failed(t.toString());
+                    throw t;
+                }
                 logger.info("Driver script finished");
             }
         } catch (Throwable t) {

@@ -79,12 +79,14 @@ public class GuiDriver {
 
     private final QuPathGUI qupath;
     private final File outDir;
+    final ActionLog actions;
     final Indicator indicator;
 
     GuiDriver(QuPathGUI qupath, String outDir) {
         this.qupath = qupath;
         this.outDir = new File(outDir);
         this.indicator = new Indicator(qupath);
+        this.actions = new ActionLog(qupath);
     }
 
     /** Evaluates Groovy source (a File or String) with the helpers bound; {@code println} goes to {@code out} if given. */
@@ -483,6 +485,7 @@ public class GuiDriver {
         logger.info("click {} right={} double={}", node, right, doubleClick);
         var action = (right ? "right-click" : doubleClick ? "double-click" : "click")
                 + (node instanceof Labeled l ? " “" + name(l) + "”" : "");
+        ActionLog.target(node.getScene() == null ? null : node.getScene().getWindow(), action);
         indicator.before(node, action);
         Platform.runLater(() -> {
             if (node instanceof ButtonBase b && !right && !doubleClick) {
@@ -536,6 +539,7 @@ public class GuiDriver {
         for (MenuItem m = item; m != null; m = m.getParentMenu())
             path.add(0, m.getText());
         var action = String.join(" ▸ ", path);
+        ActionLog.target(qupath.getStage(), action);
         indicator.before(action);
         indicator.note(action);
         Platform.runLater(() -> {
@@ -557,6 +561,7 @@ public class GuiDriver {
             return fields.get(field);
         });
         var action = "type “" + text + "”";
+        ActionLog.target(window, action);
         indicator.before(target, action);
         var result = fx(() -> {
             target.setText(text);
@@ -594,6 +599,7 @@ public class GuiDriver {
             throw new IllegalArgumentException("Won't close QuPath's main window; use qupath_quit");
         var title = titleOf(window);
         logger.info("close {}", title);
+        ActionLog.target(window, "close");
         indicator.before("close “" + title + "”");
         indicator.note("close “" + title + "”");
         Platform.runLater(() -> {
@@ -608,6 +614,7 @@ public class GuiDriver {
     /** Sets the zoom before the centre, because changing the downsample afterwards moves the centre. */
     public void view(double x, double y, double downsample, Integer z, Integer t) throws Exception {
         var action = "view %,.0f, %,.0f at %s×".formatted(x, y, downsample);
+        ActionLog.target(qupath.getStage(), action);
         if (Indicator.paced()) {
             // A jump to another place and zoom reads as a cut on a recording, so paced mode moves there over the delay:
             // the centre in a straight line, the zoom at a steady rate.
@@ -806,6 +813,8 @@ public class GuiDriver {
     /** Dispatches a change worked out by {@link #select} or {@link #set}, marking its target for the person watching. */
     private String apply(Change change) {
         logger.info("{}", change.message());
+        ActionLog.target(change.target() == null || change.target().getScene() == null ? null
+                : change.target().getScene().getWindow(), change.action());
         if (change.row() == null) {
             indicator.before(change.target(), change.action());
             Platform.runLater(change.apply());
@@ -1034,6 +1043,7 @@ public class GuiDriver {
         }
         var target = fx(() -> window.getScene().getFocusOwner() != null ? window.getScene().getFocusOwner() : window.getScene().getRoot());
         logger.info("keys '{}' -> {}", keys, target);
+        ActionLog.target(window, "key " + keys);
         indicator.before("key " + keys);
         Platform.runLater(() -> events.forEach(e -> Event.fireEvent(target, e)));
         indicator.keys(window, keys);
