@@ -10,11 +10,13 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.ToggleGroup;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.extensions.QuPathExtension;
 import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.tools.GuiTools;
 
 /**
  * Serves MCP from inside QuPath while the "MCP server" preference is on. For tests, {@code qupath.driver.port} starts
@@ -51,7 +53,13 @@ public class GuiDriverExtension implements QuPathExtension {
             Indicator.mode.addListener((obs, was, now) -> radio.setSelected(now == m));
             show.getItems().add(radio);
         }
-        menu.getItems().addAll(item, show);
+        var openLog = new MenuItem("Open agent action log folder");
+        openLog.setOnAction(e -> {
+            var dir = ActionLog.directory();
+            dir.mkdirs();
+            GuiTools.browseDirectory(dir);
+        });
+        menu.getItems().addAll(item, show, openLog);
         qupath.getPreferencePane().addPropertyPreference(ActionLog.enabled, Boolean.class, "Log agent actions", "MCP server",
                 "Record every tool call the agent makes, with its arguments and result, as one JSON line per action in a "
                         + "file per QuPath session, so the session can be checked or reproduced.");

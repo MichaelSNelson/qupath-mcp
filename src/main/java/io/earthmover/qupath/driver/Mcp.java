@@ -240,6 +240,14 @@ Both results end with "Opened while waiting:" and the outline of any window that
                             return text("mode: %s, delay_ms: %d".formatted(Indicator.mode.get().name().toLowerCase(),
                                     Indicator.delayMs.get()));
                         }),
+                tool("qupath_action_log", """
+                        Read the action log: every tool call, /groovy request and start-up script of this QuPath session, \
+                        one JSON object each with its arguments, the window and control it acted on, result, timing and the \
+                        project and image that were open. Use it to check or redo what was done. The person turns it off with \
+                        the "Log agent actions" preference.""",
+                        """
+                        {"limit":{"description":"Entries to show, from the end","type":"integer","default":20}}""", null,
+                        a -> text(driver.actions.tail((int) num(a, "limit", 20)))),
                 tool("qupath_quit", "Quit QuPath.", "{}", null, a -> {
                     // Exiting at once would drop the connection before the reply is written.
                     var t = new Thread(() -> {

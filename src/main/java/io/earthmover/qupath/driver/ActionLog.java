@@ -16,6 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParser;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.StringProperty;
@@ -46,11 +48,14 @@ class ActionLog {
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     /** The returned text kept per entry; a long qupath_describe result is cut to this. */
     static final int RESULT_CHARS = 4000;
+    /** The returned text shown per entry by {@link #tail}; the file keeps the whole of it. */
+    static final int TAIL_CHARS = 400;
 
     static final BooleanProperty enabled = PathPrefs.createPersistentPreference("mcpActionLog", true);
     static final StringProperty folder = PathPrefs.createPersistentPreference("mcpActionLogDir", "");
 
     private static final Gson GSON = GsonTools.getInstance().newBuilder().disableHtmlEscaping().create();
+    private static final Gson PRETTY = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
     /**
      * The entry of the call running on this thread, so the driver can add the window and control it resolved. Inheritable
@@ -62,6 +67,7 @@ class ActionLog {
     private final Object lock = new Object();
     private File file;
     private Writer writer;
+    private int entries;
 
     ActionLog(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -161,6 +167,39 @@ class ActionLog {
         }
     }
 
+    /** The last {@code limit} entries of this session, pretty-printed, after a line naming the file. */
+    String tail(int limit) {
+        File f;
+        int n;
+        synchronized (lock) {
+            f = file;
+            n = entries;
+        }
+        if (f == null)
+            return "No actions logged yet this session. Log folder: " + directory();
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(f.toPath());
+        } catch (IOException e) {
+            return "Could not read " + f + ": " + e.getMessage();
+        }
+        var from = Math.max(0, lines.size() - Math.max(1, limit));
+        var out = new ArrayList<String>();
+        out.add("%s — %d entries, showing %d–%d".formatted(f, n, from + 1, lines.size()));
+        for (var l : lines.subList(from, lines.size()))
+            try {
+                var e = JsonParser.parseString(l).getAsJsonObject();
+                // The file keeps the whole result; the view only needs enough to recognise it.
+                for (var key : List.of("result", "error"))
+                    if (e.has(key) && e.get(key).isJsonPrimitive() && e.get(key).getAsString().length() > TAIL_CHARS)
+                        e.addProperty(key, e.get(key).getAsString().substring(0, TAIL_CHARS) + "… [full text in the file]");
+                out.add(PRETTY.toJson(e));
+            } catch (RuntimeException e) {
+                out.add(l);
+            }
+        return String.join("\n", out);
+    }
+
     private void append(String line) {
         synchronized (lock) {
             try {
@@ -174,6 +213,7 @@ class ActionLog {
                 writer.write(line);
                 writer.write('\n');
                 writer.flush();
+                entries++;
             } catch (IOException e) {
                 logger.error("Could not write the action log", e);
             }

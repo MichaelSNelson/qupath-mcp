@@ -21,6 +21,7 @@ Tools that act on the GUI (`qupath_menu`, `qupath_click`, `qupath_select`, `qupa
 | `qupath_windows()` | find the window title to pass as `window` | One line per window: `title — WxH (focused)` |
 | `qupath_screenshot(window=None, index=0, max_size=1024, format="png", quality=0.85, viewer=False, region=None)` | see what a window shows | The window as an image, plus a text item with its size |
 | `qupath_show_actions(mode=None, delay_ms=None)` | change what the person watching sees: `off`, `mark` or `paced`, and the delay before each paced action | `mode: mark, delay_ms: 1000` |
+| `qupath_action_log(limit=20)` | read what the agent has done this session, to check or redo it | `<path> — N entries, showing a–b`, then those entries with long results cut at 400 characters; see [The action log](#the-action-log) |
 | `qupath_quit()` | end a session | `quit requested` |
 
 ## The action log
@@ -44,7 +45,7 @@ One line, from a test session:
 
 There is no replay command. An entry has what you need to redo the call by hand, and the `code` of a `qupath_run_groovy` entry can be sent back through that tool as it is.
 
-Logging is on by default; the **Log agent actions** preference turns it off. The file goes in the folder set by the **Action log folder** preference, by default `mcp-logs` in QuPath's user directory (or in `~/QuPath` when QuPath has no user directory).
+Logging is on by default; the **Log agent actions** preference turns it off. The file goes in the folder set by the **Action log folder** preference, by default `mcp-logs` in QuPath's user directory (or in `~/QuPath` when QuPath has no user directory). **Extensions ▸ Open agent action log folder** opens it, and `qupath_action_log` reads the last entries back.
 
 ## Watching the agent
 
