@@ -60,7 +60,7 @@ class Mcp {
                 tool("qupath_menu", """
                         Fire a menu item such as "File>Open..." or "Analyze>Cell detection>Cell detection" without blocking.
 
-                        A check menu item is toggled, as a click would (so "Extensions>MCP server" turns this server off, after \
+                        A check menu item is toggled, as a click would (so "Extensions>MCP server>Enabled" turns this server off, after \
                         replying; turn it back on from QuPath's menu). Waits about a second and returns the open windows, one per \
                         line, then the description of each window the item opened, or "No new window opened." File choosers are \
                         native dialogs the tools cannot see: if the UI stops responding, that is reported. \
