@@ -20,6 +20,7 @@ import com.google.gson.Gson;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.StringProperty;
+import javafx.scene.Node;
 import javafx.stage.Window;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -54,13 +55,13 @@ class ActionLog {
     private static final Gson GSON = GsonTools.getInstance().newBuilder().disableHtmlEscaping().create();
 
     /**
-     * The entry of the call running on this thread, so the driver can add the window and control it resolved. Inheritable
-     * because a Groovy evaluation runs on a thread started by the request's, and its helpers act through the same driver.
+     * The entry of the call running on this thread, so the driver can add the window and control it resolved. Not
+     * inheritable: thread pools started during a call would keep a finished entry alive. A Groovy evaluation, which runs
+     * on a thread of its own, is handed its caller's entry with {@link #attach}.
      */
-    private static final InheritableThreadLocal<Entry> CURRENT = new InheritableThreadLocal<>();
+    private static final ThreadLocal<Entry> CURRENT = new ThreadLocal<>();
 
     private final QuPathGUI qupath;
-    private final Object lock = new Object();
     private File file;
     private Writer writer;
 
@@ -74,7 +75,7 @@ class ActionLog {
         if (pref != null && !pref.isBlank())
             return new File(pref);
         var user = PathPrefs.userPathProperty().get();
-        var base = user != null && !user.isBlank() ? new File(user) : new File(System.getProperty("user.home"), "QuPath");
+        var base = user != null && !user.isBlank() ? new File(user) : PathPrefs.getDefaultQuPathUserDirectory().toFile();
         return new File(base, "mcp-logs");
     }
 
@@ -83,6 +84,19 @@ class ActionLog {
         var entry = new Entry(source, client, tool, args);
         CURRENT.set(entry);
         return entry;
+    }
+
+    /** The entry of the call running on this thread, or null; pass it to {@link #attach} on a thread the call starts. */
+    static Entry current() {
+        return CURRENT.get();
+    }
+
+    static void attach(Entry entry) {
+        CURRENT.set(entry);
+    }
+
+    static void target(Node node, String action) {
+        target(node == null || node.getScene() == null ? null : node.getScene().getWindow(), action);
     }
 
     /**
@@ -139,7 +153,7 @@ class ActionLog {
                 if (window != null)
                     e.put("window", window);
                 if (!targets.isEmpty())
-                    e.put("target", targets.size() == 1 ? targets.get(0) : String.join("; ", targets));
+                    e.put("target", String.join("; ", targets));
             }
             e.put("ok", ok);
             e.put("ms", Math.round((System.nanoTime() - start) / 1e6));
@@ -162,28 +176,26 @@ class ActionLog {
         }
     }
 
-    private void append(String line) {
-        synchronized (lock) {
-            try {
-                var dir = directory();
-                // The folder preference can change mid-session; the rest of the session goes to the new folder.
-                if (writer != null && !dir.getAbsoluteFile().equals(file.getParentFile().getAbsoluteFile())) {
-                    writer.close();
-                    writer = null;
-                }
-                if (writer == null) {
-                    Files.createDirectories(dir.toPath());
-                    var name = file != null ? file.getName() : "mcp-" + FILE_STAMP.format(OffsetDateTime.now()) + ".jsonl";
-                    file = new File(dir, name);
-                    writer = new FileWriter(file, StandardCharsets.UTF_8, true);
-                    logger.info("Agent actions logged to {}", file);
-                }
-                writer.write(line);
-                writer.write('\n');
-                writer.flush();
-            } catch (IOException e) {
-                logger.error("Could not write the action log", e);
+    private synchronized void append(String line) {
+        try {
+            var dir = directory();
+            // The folder preference can change mid-session; the rest of the session goes to the new folder.
+            if (writer != null && !dir.getAbsoluteFile().equals(file.getParentFile().getAbsoluteFile())) {
+                writer.close();
+                writer = null;
             }
+            if (writer == null) {
+                Files.createDirectories(dir.toPath());
+                var name = file != null ? file.getName() : "mcp-" + FILE_STAMP.format(OffsetDateTime.now()) + ".jsonl";
+                file = new File(dir, name);
+                writer = new FileWriter(file, StandardCharsets.UTF_8, true);
+                logger.info("Agent actions logged to {}", file);
+            }
+            writer.write(line);
+            writer.write('\n');
+            writer.flush();
+        } catch (IOException e) {
+            logger.error("Could not write the action log", e);
         }
     }
 }

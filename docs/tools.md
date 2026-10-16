@@ -44,7 +44,7 @@ One line, from a test session:
 
 There is no replay command. An entry has what you need to redo the call by hand, and the `code` of a `qupath_run_groovy` entry can be sent back through that tool as it is.
 
-Logging is on by default; the **Log agent actions** preference turns it off. The file goes in the folder set by the **Action log folder** preference, by default `mcp-logs` in QuPath's user directory (or in `~/QuPath` when QuPath has no user directory).
+Logging is on by default; the **Log agent actions** preference turns it off. The file goes in the folder set by the **Action log folder** preference, by default `mcp-logs` in QuPath's user directory.
 
 ## Watching the agent
 

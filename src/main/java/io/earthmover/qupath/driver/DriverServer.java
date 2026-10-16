@@ -216,7 +216,9 @@ class DriverServer {
         var output = new StringWriter();
         var out = new PrintWriter(output, true);
         var result = new CompletableFuture<Object>();
+        var entry = ActionLog.current();
         var worker = new Thread(() -> {
+            ActionLog.attach(entry);
             try {
                 result.complete(driver.evaluate(code, out));
             } catch (Throwable t) {

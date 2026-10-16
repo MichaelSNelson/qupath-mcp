@@ -485,7 +485,7 @@ public class GuiDriver {
         logger.info("click {} right={} double={}", node, right, doubleClick);
         var action = (right ? "right-click" : doubleClick ? "double-click" : "click")
                 + (node instanceof Labeled l ? " “" + name(l) + "”" : "");
-        ActionLog.target(node.getScene() == null ? null : node.getScene().getWindow(), action);
+        ActionLog.target(node, action);
         indicator.before(node, action);
         Platform.runLater(() -> {
             if (node instanceof ButtonBase b && !right && !doubleClick) {
@@ -599,9 +599,10 @@ public class GuiDriver {
             throw new IllegalArgumentException("Won't close QuPath's main window; use qupath_quit");
         var title = titleOf(window);
         logger.info("close {}", title);
-        ActionLog.target(window, "close");
-        indicator.before("close “" + title + "”");
-        indicator.note("close “" + title + "”");
+        var action = "close “" + title + "”";
+        ActionLog.target(window, action);
+        indicator.before(action);
+        indicator.note(action);
         Platform.runLater(() -> {
             var request = new WindowEvent(window, WindowEvent.WINDOW_CLOSE_REQUEST);
             window.fireEvent(request);
@@ -813,8 +814,7 @@ public class GuiDriver {
     /** Dispatches a change worked out by {@link #select} or {@link #set}, marking its target for the person watching. */
     private String apply(Change change) {
         logger.info("{}", change.message());
-        ActionLog.target(change.target() == null || change.target().getScene() == null ? null
-                : change.target().getScene().getWindow(), change.action());
+        ActionLog.target(change.target(), change.action());
         if (change.row() == null) {
             indicator.before(change.target(), change.action());
             Platform.runLater(change.apply());
@@ -1056,7 +1056,9 @@ public class GuiDriver {
      */
     public String open(String pathOrUri) throws Exception {
         logger.info("open {}", pathOrUri);
-        indicator.note("open " + pathOrUri.replaceFirst(".*[/\\\\]", ""));
+        var action = "open " + pathOrUri.replaceFirst(".*[/\\\\]", "");
+        ActionLog.target(qupath.getStage(), action);
+        indicator.note(action);
         var result = new CompletableFuture<Boolean>();
         // openImage must run on the FX thread; a prompt it shows nests an event loop there, so the wait below still times out.
         Platform.runLater(() -> {
