@@ -5,7 +5,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +66,10 @@ class ActionLog {
     static final IntegerProperty keepDays = PathPrefs.createPersistentPreference("mcpActionLogKeepDays", 0);
     static final IntegerProperty warnMB = PathPrefs.createPersistentPreference("mcpActionLogWarnMB", 1024);
 
+    /** Only files of exactly this shape are counted or deleted, so a shared folder's other logs are left alone. */
+    private static final Pattern LOG_NAME = Pattern.compile("mcp-\\d{8}-\\d{6}\\.jsonl");
+    private static final boolean POSIX = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+
     private static final Gson GSON = GsonTools.getInstance().newBuilder().disableHtmlEscaping().create();
 
     /**
@@ -76,6 +83,8 @@ class ActionLog {
     private File file;
     private Writer writer;
     private volatile String warning;
+    /** The folder that last failed to open, so a folder that can't be written is reported once rather than per action. */
+    private File failed;
 
     ActionLog(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -136,6 +145,8 @@ class ActionLog {
     class Entry {
         private final OffsetDateTime time = OffsetDateTime.now();
         private final long start = System.nanoTime();
+        /** Read at the start too, so the call that turns logging off is still recorded. */
+        private final boolean logging = enabled.get();
         private final String source, client, tool;
         private final Map<String, Object> args;
         private String window;
@@ -159,8 +170,17 @@ class ActionLog {
         private void write(boolean ok, String result, String error) {
             if (CURRENT.get() == this)
                 CURRENT.remove();
-            if (!enabled.get())
+            if (!logging && !enabled.get())
                 return;
+            try {
+                append(GSON.toJson(entry(ok, result, error)));
+            } catch (RuntimeException e) {
+                // The log must never fail the action it records.
+                logger.error("Could not write the action log", e);
+            }
+        }
+
+        private Map<String, Object> entry(boolean ok, String result, String error) {
             var e = new LinkedHashMap<String, Object>();
             e.put("time", time.toString());
             e.put("source", source);
@@ -191,37 +211,47 @@ class ActionLog {
             } catch (RuntimeException ignored) {
                 // A project or image mid-change; the entry is still worth keeping.
             }
-            append(GSON.toJson(e));
+            return e;
         }
     }
 
     private synchronized void append(String line) {
+        var dir = directory();
         try {
-            var dir = directory();
             // The folder preference can change mid-session; the rest of the session goes to the new folder.
             if (writer != null && !dir.getAbsoluteFile().equals(file.getParentFile().getAbsoluteFile())) {
                 writer.close();
                 writer = null;
             }
             if (writer == null) {
-                Files.createDirectories(dir.toPath());
                 var name = file != null ? file.getName() : "mcp-" + FILE_STAMP.format(OffsetDateTime.now()) + ".jsonl";
                 file = new File(dir, name);
+                // The log holds the code the agent ran and what it read, so only the user can read it.
+                if (POSIX) {
+                    Files.createDirectories(dir.toPath(), PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+                    if (!file.exists())
+                        Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+                } else {
+                    Files.createDirectories(dir.toPath());
+                }
                 writer = new FileWriter(file, StandardCharsets.UTF_8, true);
+                failed = null;
                 logger.info("Agent actions logged to {}", file);
                 tidy(dir);
             }
             writer.write(line);
             writer.write('\n');
             writer.flush();
-        } catch (IOException e) {
-            logger.error("Could not write the action log", e);
+        } catch (IOException | RuntimeException e) {
+            if (!dir.equals(failed))
+                logger.error("Could not write the action log in {}", dir, e);
+            failed = dir;
         }
     }
 
     /** Deletes logs past the retention period, then warns if what is left is over the size threshold. */
     private void tidy(File dir) {
-        var logs = dir.listFiles((d, n) -> n.startsWith("mcp-") && n.endsWith(".jsonl"));
+        var logs = dir.listFiles(f -> f.isFile() && LOG_NAME.matcher(f.getName()).matches());
         if (logs == null)
             return;
         int days = keepDays.get();

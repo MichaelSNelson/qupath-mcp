@@ -175,8 +175,9 @@ class DriverServer {
                     case "/groovy" -> {
                         var code = new String(req.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
                         var timeout = req.getParameter("timeout");
+                        double seconds = timeout == null ? 60 : Double.parseDouble(timeout);
                         var entry = driver.actions.begin("http", req.getRemoteAddr(), "groovy", Map.of("code", code));
-                        var r = evaluate(code, timeout == null ? 60 : Double.parseDouble(timeout));
+                        var r = evaluate(code, seconds);
                         if (r.ok())
                             entry.done((r.output().isEmpty() ? "" : r.output() + "\n") + "result: " + r.result());
                         else
