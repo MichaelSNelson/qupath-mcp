@@ -8,10 +8,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,10 +50,10 @@ import qupath.lib.io.GsonTools;
  * intact up to the action that was running if QuPath goes down. The folder defaults to {@code mcp-logs} in QuPath's
  * user directory (preference "Action log folder").
  *
- * <p>Logs are kept until the user removes them unless "Delete action logs after (days)" is set, because the log is the
- * record a session is checked or reproduced from. When a session opens its file, logs older than that are deleted, and
- * if the folder is still over "Warn when action logs exceed (MB)" the user gets a notification and the agent a note in
- * its next tool result, so whoever is driving finds out.
+ * <p>Logs are kept until they add up to more than "Action log limit (MB)", because the log is the record a session is
+ * checked or reproduced from. Over the limit, the oldest are deleted if "Delete oldest action logs over the limit" is
+ * on; otherwise the user gets a notification and the agent a note in its next tool result, so whoever is driving finds
+ * out. Both happen when a session opens its log file.
  */
 class ActionLog {
 
@@ -63,8 +64,8 @@ class ActionLog {
 
     static final BooleanProperty enabled = PathPrefs.createPersistentPreference("mcpActionLog", true);
     static final StringProperty folder = PathPrefs.createPersistentPreference("mcpActionLogDir", "");
-    static final IntegerProperty keepDays = PathPrefs.createPersistentPreference("mcpActionLogKeepDays", 0);
-    static final IntegerProperty warnMB = PathPrefs.createPersistentPreference("mcpActionLogWarnMB", 1024);
+    static final IntegerProperty limit = PathPrefs.createPersistentPreference("mcpActionLogLimitMB", 1024);
+    static final BooleanProperty deleteOldest = PathPrefs.createPersistentPreference("mcpActionLogDeleteOldest", false);
 
     /** Only files of exactly this shape are counted or deleted, so a shared folder's other logs are left alone. */
     private static final Pattern LOG_NAME = Pattern.compile("mcp-\\d{8}-\\d{6}\\.jsonl");
@@ -249,32 +250,54 @@ class ActionLog {
         }
     }
 
-    /** Deletes logs past the retention period, then warns if what is left is over the size threshold. */
+    /**
+     * Keeps the logs under the size limit: deletes the oldest (never this session's) if the user has allowed it, else
+     * warns the user and the agent. Names sort by date, so the oldest come first.
+     */
     private void tidy(File dir) {
         var logs = dir.listFiles(f -> f.isFile() && LOG_NAME.matcher(f.getName()).matches());
-        if (logs == null)
+        int limitMB = limit.get();
+        if (logs == null || limitMB <= 0)
             return;
-        int days = keepDays.get();
-        long cutoff = System.currentTimeMillis() - Duration.ofDays(days).toMillis();
-        long bytes = 0;
-        for (var log : logs) {
-            if (days > 0 && !log.equals(file) && log.lastModified() < cutoff) {
-                if (log.delete())
-                    logger.info("Deleted action log {}, older than {} days", log, days);
-                continue;
-            }
+        long max = limitMB * 1024L * 1024L, bytes = 0;
+        for (var log : logs)
             bytes += log.length();
-        }
-        int limit = warnMB.get();
-        if (limit <= 0 || bytes <= limit * 1024L * 1024L)
+        if (bytes <= max)
             return;
+        if (deleteOldest.get()) {
+            Arrays.sort(logs, Comparator.comparing(File::getName));
+            int deleted = 0;
+            long freed = 0;
+            for (var log : logs) {
+                if (bytes <= max)
+                    break;
+                long size = log.length();
+                if (log.equals(file) || !log.delete())
+                    continue;
+                deleted++;
+                freed += size;
+                bytes -= size;
+                logger.info("Deleted action log {} to stay under {} MB", log, limitMB);
+            }
+            if (deleted > 0) {
+                var message = "Deleted the %d oldest agent action logs (%s) in %s to stay under the %d MB limit."
+                        .formatted(deleted, size(freed), dir, limitMB);
+                Platform.runLater(() -> Dialogs.showInfoNotification("MCP action logs", message));
+            }
+            if (bytes <= max)
+                return;
+        }
+        logger.warn("Action logs in {} total {}, over the {} MB limit", dir, size(bytes), limitMB);
+        var message = "The agent action logs in %s total %s, over the %d MB limit. Delete old ones, or turn on "
+                + "\"Delete oldest action logs over the limit\" in the MCP server preferences.";
+        var text = message.formatted(dir, size(bytes), limitMB);
+        Platform.runLater(() -> Dialogs.showWarningNotification("MCP action logs", text));
+        warning = ("Note: QuPath's agent action logs in %s total %s, over the %d MB limit. Tell the user; don't delete "
+                + "them yourself, they are the record of past sessions.").formatted(dir, size(bytes), limitMB);
+    }
+
+    private static String size(long bytes) {
         double mb = bytes / (1024.0 * 1024);
-        var size = mb < 1024 ? "%.0f MB".formatted(mb) : "%.1f GB".formatted(mb / 1024);
-        logger.warn("Action logs in {} total {}, over the {} MB warning threshold", dir, size, limit);
-        Platform.runLater(() -> Dialogs.showWarningNotification("MCP action logs",
-                "The agent action logs in %s total %s. Delete old ones, or set \"Delete action logs after (days)\" in the MCP server preferences."
-                        .formatted(dir, size)));
-        warning = ("Note: QuPath's agent action logs in %s total %s, over the %d MB warning threshold. Tell the user; "
-                + "don't delete them yourself, they are the record of past sessions.").formatted(dir, size, limit);
+        return mb < 1024 ? "%.0f MB".formatted(mb) : "%.1f GB".formatted(mb / 1024);
     }
 }

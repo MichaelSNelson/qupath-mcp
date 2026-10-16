@@ -55,10 +55,13 @@ public class GuiDriverExtension implements QuPathExtension {
                         + "file per QuPath session, so the session can be checked or reproduced.");
         qupath.getPreferencePane().addDirectoryPropertyPreference(ActionLog.folder, "Action log folder", "MCP server",
                 "Where the action logs go. Empty means the mcp-logs folder in QuPath's user directory.");
-        qupath.getPreferencePane().addPropertyPreference(ActionLog.keepDays, Integer.class, "Delete action logs after (days)",
-                "MCP server", "Delete action logs older than this when a session starts logging. 0 keeps them all.");
-        qupath.getPreferencePane().addPropertyPreference(ActionLog.warnMB, Integer.class, "Warn when action logs exceed (MB)",
-                "MCP server", "Show a notification, and tell the agent, when the action logs in the folder add up to more than this. 0 never warns.");
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.limit, Integer.class, "Action log limit (MB)", "MCP server",
+                "Total size of the action logs before QuPath deletes the oldest (if allowed below) or warns you and the agent. "
+                        + "0 means no limit.");
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.deleteOldest, Boolean.class,
+                "Delete oldest action logs over the limit", "MCP server",
+                "When the action logs pass the limit, delete the oldest until they are under it, instead of warning. "
+                        + "Off by default, since the logs are the record of past sessions.");
         qupath.getPreferencePane().addPropertyPreference(port, Integer.class, "MCP server port", "MCP server",
                 "Port for the MCP server on 127.0.0.1; takes effect when the server next starts.");
         qupath.getPreferencePane().addPropertyPreference(Indicator.delayMs, Integer.class, "Paced delay (ms)", "MCP server",

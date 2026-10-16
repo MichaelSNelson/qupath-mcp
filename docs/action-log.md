@@ -25,11 +25,16 @@ The log holds the Groovy the agent ran and the text it read back, which can incl
 
 The log is a record of what the agent did, not a tamper-proof audit trail: an agent that can run Groovy can also turn logging off or edit the files. The call that turns logging off is still recorded.
 
-## Size
+## Size and cleanup
 
 Most entries are under 1 KB. An entry that returns a long dialog outline can reach about 5 KB, since the returned text is cut at 4000 characters; the Groovy source of a `qupath_run_groovy` call is kept in full. A session of a few hundred tool calls writes roughly 0.2 to 2 MB.
 
-Logs are kept until you delete them, because they are the record of past sessions. To bound them, set **Delete action logs after (days)**: when a session starts logging, older logs are deleted. When the logs in the folder add up to more than **Warn when action logs exceed (MB)**, QuPath shows a notification and the agent's next successful tool call carries a one-line note asking it to tell you. Both run when a session opens its log file, and again if the folder preference changes. Only the extension's own logs, named like `mcp-20261016-143723.jsonl`, are counted or deleted; other files in the folder are left alone.
+Logs are kept until they add up to more than **Action log limit (MB)**, 1024 by default, which holds several hundred busy sessions. Over the limit, QuPath does one of two things:
+
+- **By default, it warns and deletes nothing.** QuPath shows a notification, and the agent's next successful tool call carries a one-line note asking it to tell you. Delete old logs yourself, raise the limit, or turn on deletion.
+- **With Delete oldest action logs over the limit on, it deletes the oldest logs** until the rest fit under the limit, then shows a notification saying how many it deleted and how much space that freed. The current session's log is never deleted.
+
+Deletion is off by default because the logs are the record of past sessions; turn it on if you only need recent ones. The check runs when a session writes its first entry, and again if the folder preference changes, so a single long session can pass the limit until the next one starts. Only the extension's own logs, named like `mcp-20261016-143723.jsonl`, are counted or deleted; other files in the folder are left alone.
 
 ## Preferences
 
@@ -39,8 +44,8 @@ Under **Edit ▸ Preferences ▸ MCP server**:
 |---|---|---|
 | **Log agent actions** | on | Turns the log off. |
 | **Action log folder** | empty | Where the logs go; empty means `mcp-logs` in QuPath's user directory. A change applies from the next action. |
-| **Delete action logs after (days)** | 0 | Deletes the extension's logs older than this when a session starts logging; 0 keeps them all. |
-| **Warn when action logs exceed (MB)** | 1024 | Total size of the logs that triggers the warning; 0 never warns. |
+| **Action log limit (MB)** | 1024 | Total size of the logs before QuPath warns or deletes; 0 means no limit. |
+| **Delete oldest action logs over the limit** | off | Over the limit, delete the oldest logs instead of warning. |
 
 ## Redoing a session
 
