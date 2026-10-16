@@ -56,7 +56,7 @@ public class GuiDriverExtension implements QuPathExtension {
         qupath.getPreferencePane().addDirectoryPropertyPreference(ActionLog.folder, "Action log folder", "MCP server",
                 "Where the action logs go. Empty means the mcp-logs folder in QuPath's user directory.");
         qupath.getPreferencePane().addPropertyPreference(ActionLog.limit, Integer.class, "Action log limit (MB)", "MCP server",
-                "Total size of the action logs before QuPath deletes the oldest (if allowed below) or warns you and the agent. "
+                "Total size of the action logs before qupath-mcp deletes the oldest (if allowed below) or warns you and the agent. "
                         + "0 means no limit.");
         qupath.getPreferencePane().addPropertyPreference(ActionLog.deleteOldest, Boolean.class,
                 "Delete oldest action logs over the limit", "MCP server",

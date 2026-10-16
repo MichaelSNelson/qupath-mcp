@@ -282,7 +282,7 @@ class ActionLog {
             if (deleted > 0) {
                 var message = "Deleted the %d oldest agent action logs (%s) in %s to stay under the %d MB limit."
                         .formatted(deleted, size(freed), dir, limitMB);
-                Platform.runLater(() -> Dialogs.showInfoNotification("MCP action logs", message));
+                Platform.runLater(() -> Dialogs.showInfoNotification("qupath-mcp", message));
             }
             if (bytes <= max)
                 return;
@@ -291,8 +291,8 @@ class ActionLog {
         var message = "The agent action logs in %s total %s, over the %d MB limit. Delete old ones, or turn on "
                 + "\"Delete oldest action logs over the limit\" in the MCP server preferences.";
         var text = message.formatted(dir, size(bytes), limitMB);
-        Platform.runLater(() -> Dialogs.showWarningNotification("MCP action logs", text));
-        warning = ("Note: QuPath's agent action logs in %s total %s, over the %d MB limit. Tell the user; don't delete "
+        Platform.runLater(() -> Dialogs.showWarningNotification("qupath-mcp", text));
+        warning = ("Note: qupath-mcp's action logs in %s total %s, over the %d MB limit. Tell the user; don't delete "
                 + "them yourself, they are the record of past sessions.").formatted(dir, size(bytes), limitMB);
     }
 

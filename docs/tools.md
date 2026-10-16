@@ -25,7 +25,7 @@ Tools that act on the GUI (`qupath_menu`, `qupath_click`, `qupath_select`, `qupa
 
 ## The action log
 
-QuPath writes every action the agent takes to a log file; see [Action log](action-log.md).
+qupath-mcp writes every action the agent takes to a log file; see [Action log](action-log.md).
 
 ## Watching the agent
 
