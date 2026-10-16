@@ -1,6 +1,7 @@
 package io.earthmover.qupath.driver;
 
 import java.io.File;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,18 @@ public class GuiDriverExtension implements QuPathExtension {
             show.getItems().add(radio);
         }
         menu.getItems().addAll(item, show);
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.enabled, Boolean.class, "Log agent actions", "MCP server",
+                "Record every tool call the agent makes, with its arguments and result, as one JSON line per action in a "
+                        + "file per QuPath session, so the session can be checked or reproduced.");
+        qupath.getPreferencePane().addDirectoryPropertyPreference(ActionLog.folder, "Action log folder", "MCP server",
+                "Where the action logs go. Empty means the mcp-logs folder in QuPath's user directory.");
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.limit, Integer.class, "Action log limit (MB)", "MCP server",
+                "Total size of the action logs before qupath-mcp deletes the oldest (if allowed below) or warns you and the agent. "
+                        + "0 means no limit.");
+        qupath.getPreferencePane().addPropertyPreference(ActionLog.deleteOldest, Boolean.class,
+                "Delete oldest action logs over the limit", "MCP server",
+                "When the action logs pass the limit, delete the oldest until they are under it, instead of warning. "
+                        + "Off by default, since the logs are the record of past sessions.");
         qupath.getPreferencePane().addPropertyPreference(port, Integer.class, "MCP server port", "MCP server",
                 "Port for the MCP server on 127.0.0.1; takes effect when the server next starts.");
         qupath.getPreferencePane().addPropertyPreference(Indicator.delayMs, Integer.class, "Paced delay (ms)", "MCP server",
@@ -64,7 +77,8 @@ public class GuiDriverExtension implements QuPathExtension {
     }
 
     private void run(QuPathGUI qupath, String script) {
-        var driver = new GuiDriver(qupath, System.getProperty("qupath.driver.out", "/tmp"));
+        // snap() writes PNGs here; the JVM's temp dir exists on every platform, /tmp does not.
+        var driver = new GuiDriver(qupath, System.getProperty("qupath.driver.out", System.getProperty("java.io.tmpdir")));
         try {
             // installExtension runs before the main stage is shown.
             driver.waitForShowing(qupath.getStage(), 60);
@@ -80,7 +94,14 @@ public class GuiDriverExtension implements QuPathExtension {
             });
             if (script != null) {
                 logger.info("Driver running {}", script);
-                driver.evaluate(new File(script), null);
+                var entry = driver.actions.begin("script", null, "script", Map.of("path", script));
+                try {
+                    var result = driver.evaluate(new File(script), null);
+                    entry.done("result: " + result);
+                } catch (Throwable t) {
+                    entry.failed(t.toString());
+                    throw t;
+                }
                 logger.info("Driver script finished");
             }
         } catch (Throwable t) {

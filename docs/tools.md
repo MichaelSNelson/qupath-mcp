@@ -23,6 +23,10 @@ Tools that act on the GUI (`qupath_menu`, `qupath_click`, `qupath_select`, `qupa
 | `qupath_show_actions(mode=None, delay_ms=None)` | change what the person watching sees: `off`, `mark` or `paced`, and the delay before each paced action | `mode: mark, delay_ms: 1000` |
 | `qupath_quit()` | end a session | `quit requested` |
 
+## The action log
+
+qupath-mcp writes every action the agent takes to a log file; see [Action log](action-log.md).
+
 ## Watching the agent
 
 QuPath shows the person at the screen what the agent does, in one of three modes:

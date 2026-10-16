@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -174,7 +175,13 @@ class DriverServer {
                     case "/groovy" -> {
                         var code = new String(req.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
                         var timeout = req.getParameter("timeout");
-                        var r = evaluate(code, timeout == null ? 60 : Double.parseDouble(timeout));
+                        double seconds = timeout == null ? 60 : Double.parseDouble(timeout);
+                        var entry = driver.actions.begin("http", req.getRemoteAddr(), "groovy", Map.of("code", code));
+                        var r = evaluate(code, seconds);
+                        if (r.ok())
+                            entry.done((r.output().isEmpty() ? "" : r.output() + "\n") + "result: " + r.result());
+                        else
+                            entry.failed(r.error());
                         send(res, 200, "application/json", "{\"ok\":%b,\"result\":%s,\"output\":%s,\"error\":%s}".formatted(
                                 r.ok(), quote(r.result()), quote(r.output()), r.error() == null ? "null" : quote(r.error())));
                     }
@@ -210,7 +217,9 @@ class DriverServer {
         var output = new StringWriter();
         var out = new PrintWriter(output, true);
         var result = new CompletableFuture<Object>();
+        var entry = ActionLog.current();
         var worker = new Thread(() -> {
+            ActionLog.attach(entry);
             try {
                 result.complete(driver.evaluate(code, out));
             } catch (Throwable t) {
