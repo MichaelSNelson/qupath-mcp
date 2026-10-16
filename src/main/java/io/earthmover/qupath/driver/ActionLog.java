@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -164,11 +165,17 @@ class ActionLog {
     private void append(String line) {
         synchronized (lock) {
             try {
+                var dir = directory();
+                // The folder preference can change mid-session; the rest of the session goes to the new folder.
+                if (writer != null && !dir.getAbsoluteFile().equals(file.getParentFile().getAbsoluteFile())) {
+                    writer.close();
+                    writer = null;
+                }
                 if (writer == null) {
-                    var dir = directory();
                     Files.createDirectories(dir.toPath());
-                    file = new File(dir, "mcp-" + FILE_STAMP.format(OffsetDateTime.now()) + ".jsonl");
-                    writer = new FileWriter(file, true);
+                    var name = file != null ? file.getName() : "mcp-" + FILE_STAMP.format(OffsetDateTime.now()) + ".jsonl";
+                    file = new File(dir, name);
+                    writer = new FileWriter(file, StandardCharsets.UTF_8, true);
                     logger.info("Agent actions logged to {}", file);
                 }
                 writer.write(line);
