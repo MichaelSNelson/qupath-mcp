@@ -299,6 +299,9 @@ Both results end with "Opened while waiting:" and the outline of any window that
                                     throw new IllegalArgumentException("%s needs `%s`; see its input schema.".formatted(name, r));
                         var content = handler.call(request.arguments());
                         entry.done(summary(content));
+                        var warning = driver.actions.takeWarning();
+                        if (warning != null)
+                            content = Stream.concat(content.stream(), Stream.of((Content) new TextContent(warning))).toList();
                         return CallToolResult.builder().content(content).isError(false).build();
                     } catch (Throwable t) {
                         var cause = t instanceof ExecutionException && t.getCause() != null ? t.getCause() : t;

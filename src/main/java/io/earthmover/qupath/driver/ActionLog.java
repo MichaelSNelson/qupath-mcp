@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -18,10 +19,13 @@ import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
 
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.StringProperty;
 import javafx.scene.Node;
 import javafx.stage.Window;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.io.GsonTools;
@@ -41,6 +45,11 @@ import qupath.lib.io.GsonTools;
  * session with no agent activity leaves nothing behind. Lines are appended and flushed as they happen, so the log is
  * intact up to the action that was running if QuPath goes down. The folder defaults to {@code mcp-logs} in QuPath's
  * user directory (preference "Action log folder").
+ *
+ * <p>Logs are kept until the user removes them unless "Delete action logs after (days)" is set, because the log is the
+ * record a session is checked or reproduced from. When a session opens its file, logs older than that are deleted, and
+ * if the folder is still over "Warn when action logs exceed (MB)" the user gets a notification and the agent a note in
+ * its next tool result, so whoever is driving finds out.
  */
 class ActionLog {
 
@@ -51,6 +60,8 @@ class ActionLog {
 
     static final BooleanProperty enabled = PathPrefs.createPersistentPreference("mcpActionLog", true);
     static final StringProperty folder = PathPrefs.createPersistentPreference("mcpActionLogDir", "");
+    static final IntegerProperty keepDays = PathPrefs.createPersistentPreference("mcpActionLogKeepDays", 0);
+    static final IntegerProperty warnMB = PathPrefs.createPersistentPreference("mcpActionLogWarnMB", 1024);
 
     private static final Gson GSON = GsonTools.getInstance().newBuilder().disableHtmlEscaping().create();
 
@@ -64,6 +75,7 @@ class ActionLog {
     private final QuPathGUI qupath;
     private File file;
     private Writer writer;
+    private volatile String warning;
 
     ActionLog(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -89,6 +101,13 @@ class ActionLog {
     /** The entry of the call running on this thread, or null; pass it to {@link #attach} on a thread the call starts. */
     static Entry current() {
         return CURRENT.get();
+    }
+
+    /** A note for the agent about the size of the log folder, at most once per check; null when there is nothing to say. */
+    String takeWarning() {
+        var w = warning;
+        warning = null;
+        return w;
     }
 
     static void attach(Entry entry) {
@@ -190,6 +209,7 @@ class ActionLog {
                 file = new File(dir, name);
                 writer = new FileWriter(file, StandardCharsets.UTF_8, true);
                 logger.info("Agent actions logged to {}", file);
+                tidy(dir);
             }
             writer.write(line);
             writer.write('\n');
@@ -197,5 +217,34 @@ class ActionLog {
         } catch (IOException e) {
             logger.error("Could not write the action log", e);
         }
+    }
+
+    /** Deletes logs past the retention period, then warns if what is left is over the size threshold. */
+    private void tidy(File dir) {
+        var logs = dir.listFiles((d, n) -> n.startsWith("mcp-") && n.endsWith(".jsonl"));
+        if (logs == null)
+            return;
+        int days = keepDays.get();
+        long cutoff = System.currentTimeMillis() - Duration.ofDays(days).toMillis();
+        long bytes = 0;
+        for (var log : logs) {
+            if (days > 0 && !log.equals(file) && log.lastModified() < cutoff) {
+                if (log.delete())
+                    logger.info("Deleted action log {}, older than {} days", log, days);
+                continue;
+            }
+            bytes += log.length();
+        }
+        int limit = warnMB.get();
+        if (limit <= 0 || bytes <= limit * 1024L * 1024L)
+            return;
+        double mb = bytes / (1024.0 * 1024);
+        var size = mb < 1024 ? "%.0f MB".formatted(mb) : "%.1f GB".formatted(mb / 1024);
+        logger.warn("Action logs in {} total {}, over the {} MB warning threshold", dir, size, limit);
+        Platform.runLater(() -> Dialogs.showWarningNotification("MCP action logs",
+                "The agent action logs in %s total %s. Delete old ones, or set \"Delete action logs after (days)\" in the MCP server preferences."
+                        .formatted(dir, size)));
+        warning = ("Note: QuPath's agent action logs in %s total %s, over the %d MB warning threshold. Tell the user; "
+                + "don't delete them yourself, they are the record of past sessions.").formatted(dir, size, limit);
     }
 }

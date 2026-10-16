@@ -46,6 +46,8 @@ There is no replay command. An entry has what you need to redo the call by hand,
 
 Logging is on by default; the **Log agent actions** preference turns it off. The file goes in the folder set by the **Action log folder** preference, by default `mcp-logs` in QuPath's user directory.
 
+Logs are kept until you remove them, since they are the record of past sessions; a busy session writes a megabyte or two. Set **Delete action logs after (days)** to have older logs deleted when a session starts logging. When the folder grows past **Warn when action logs exceed (MB)** (1024 by default; 0 turns the warning off), QuPath shows a notification and adds a note to the agent's next tool result so it can tell you.
+
 ## Watching the agent
 
 QuPath shows the person at the screen what the agent does, in one of three modes:
