@@ -226,7 +226,7 @@ Both results end with "Opened while waiting:" and the outline of any window that
                         "mark" (default) rings each control you act on and lists recent actions in the window's corner, \
                         without slowing you down. "paced" also glides a pointer to each target and waits `delay_ms` before \
                         acting, for recordings or when the person wants to follow along. "off" shows nothing. The person can \
-                        change it under Extensions > Show agent actions; it persists.""",
+                        change it under Extensions > MCP server > Show agent actions; it persists.""",
                         """
                         {"mode":{"description":"off, mark or paced; omit to keep","type":"string","enum":["off","mark","paced"]},"delay_ms":{"description":"Pause before each action in paced mode, in milliseconds; omit to keep","type":"integer","minimum":0,"maximum":5000}}""",
                         null, a -> {
