@@ -33,7 +33,7 @@ QuPath reads `catalog.json` from `raw.githubusercontent.com`, which caches it fo
 
 ## Layout
 
-- `src/main/java/io/earthmover/qupath/driver/`: the extension. `GuiDriver` holds the helpers, `Mcp` the tool definitions, `DriverServer` the HTTP server, `Indicator` the marks shown to the person watching, and `GuiDriverExtension` the preferences, the menu items and the `qupath.driver.*` properties.
+- `src/main/java/io/earthmover/qupath/driver/`: the extension. `GuiDriver` holds the helpers, `Mcp` the tool definitions, `DriverServer` the HTTP server, `Indicator` the marks shown to the person watching, `ActionLog` the per-session JSON Lines record of agent actions, and `GuiDriverExtension` the preferences, the menu items and the `qupath.driver.*` properties.
 - `docs/`: these pages, built with [Zensical](https://zensical.org) from `zensical.toml`.
 
 ## Design rules
@@ -53,7 +53,7 @@ The MCP server uses the [MCP Java SDK](https://github.com/modelcontextprotocol/j
 
 The shadow jar bundles these libraries and relocates them under `io.earthmover.qupath.driver.shaded` so they cannot collide with QuPath or other extensions. SLF4J is not bundled; QuPath provides it. The SDK finds its JSON mapper through `ServiceLoader` on the thread context class loader, so `DriverServer` sets that to the extension's class loader while it starts.
 
-`Indicator` draws into a pane it adds as the last child of each window's root (when the root is a `Pane`), unmanaged and mouse-transparent, with the id `qupath-mcp-overlay`. `GuiDriver` skips that pane when it describes a window or looks up a control, and hides it while taking a screenshot. Marks are scheduled on the FX thread after the action, so only paced mode delays a tool call. The badge and the log's header take the client's name from the MCP `initialize` request.
+`Indicator` draws into a pane it adds as the last child of each window's root (when the root is a `Pane`), unmanaged and mouse-transparent, with the id `qupath-mcp-overlay`. `GuiDriver` skips that pane when it describes a window or looks up a control, and hides it while taking a screenshot. Marks are scheduled on the FX thread after the action, so only paced mode delays a tool call. The badge and the actions panel's header take the client's name from the MCP `initialize` request.
 
 Tools return failures as `isError` results, not protocol errors. The SDK's streamable transport is session-based: a client must `initialize` first, and a `GET /mcp` without a session is answered with a 400, not a 405.
 

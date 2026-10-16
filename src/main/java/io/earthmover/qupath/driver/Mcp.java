@@ -288,22 +288,37 @@ Both results end with "Opened while waiting:" and the outline of any window that
                         .inputSchema(McpJsonDefaults.getMapper(), schema).build())
                 .callHandler((exchange, request) -> {
                     var client = exchange.getClientInfo();
-                    driver.indicator.busy(true, client == null ? null : client.title() != null ? client.title() : client.name());
+                    var who = client == null ? null : client.title() != null ? client.title() : client.name();
+                    driver.indicator.busy(true, who);
+                    var entry = driver.actions.begin("mcp", who, name, request.arguments());
                     try {
                         // Clients that load tool schemas lazily may call without arguments; say what's needed.
                         if (required != null)
                             for (var r : required.split(","))
                                 if (request.arguments() == null || request.arguments().get(r) == null)
                                     throw new IllegalArgumentException("%s needs `%s`; see its input schema.".formatted(name, r));
-                        return CallToolResult.builder().content(handler.call(request.arguments())).isError(false).build();
+                        var content = handler.call(request.arguments());
+                        entry.done(summary(content));
+                        var warning = driver.actions.takeWarning();
+                        if (warning != null)
+                            content = Stream.concat(content.stream(), Stream.of((Content) new TextContent(warning))).toList();
+                        return CallToolResult.builder().content(content).isError(false).build();
                     } catch (Throwable t) {
                         var cause = t instanceof ExecutionException && t.getCause() != null ? t.getCause() : t;
-                        return CallToolResult.builder().addTextContent(
-                                cause.getMessage() != null ? cause.getMessage() : cause.toString()).isError(true).build();
+                        var message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                        entry.failed(message);
+                        return CallToolResult.builder().addTextContent(message).isError(true).build();
                     } finally {
                         driver.indicator.busy(false, null);
                     }
                 }).build();
+    }
+
+    /** The text a tool returned, for the action log; an image is noted by its size rather than kept. */
+    private static String summary(List<Content> content) {
+        return content.stream().map(c -> c instanceof TextContent t ? t.text()
+                : c instanceof ImageContent i ? "[image " + i.mimeType() + ", " + i.data().length() + " base64 chars]"
+                : "[" + c.type() + "]").collect(Collectors.joining("\n"));
     }
 
     private static List<Content> text(String s) {
